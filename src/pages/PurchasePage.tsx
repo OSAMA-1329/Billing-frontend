@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { apiDelete, apiGet, apiPost, apiPut } from '../api/client';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InvoicePrint } from '../components/InvoicePrint';
+import { ProductFormModal, type ProductFormValues } from '../components/ProductFormModal';
 import type { Paginated, Product, Supplier } from '../types';
 import { computeRoundOff, formatCurrency, formatDate, round2 } from '../utils/format';
 
@@ -61,6 +62,7 @@ export function PurchasePage() {
 	const [lessInput, setLessInput] = useState('0');
 	const [deleteTarget, setDeleteTarget] = useState<PurchaseInvoice | null>(null);
 	const [lastInvoice, setLastInvoice] = useState<PurchaseInvoice | null>(null);
+	const [productFormOpen, setProductFormOpen] = useState(false);
 
 	const products = useQuery({
 		queryKey: ['purchase-products', productSearch],
@@ -73,6 +75,20 @@ export function PurchasePage() {
 	const purchases = useQuery({
 		queryKey: ['purchases', 'recent'],
 		queryFn: () => apiGet<Paginated<PurchaseInvoice>>('/purchases', { page: 1, limit: 12 }),
+	});
+	const createCatalogProduct = useMutation({
+		mutationFn: (values: ProductFormValues) => apiPost<Product>('/products', { ...values, openingStock: 0 }),
+		onSuccess: async (product) => {
+			addProduct(product);
+			setProductSearch('');
+			setProductFormOpen(false);
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ['products'] }),
+				queryClient.invalidateQueries({ queryKey: ['purchase-products'] }),
+			]);
+			toast.success('Product added to this purchase');
+		},
+		onError: () => toast.error('Product could not be created. Check its code and required fields.'),
 	});
 
 	const productsValue = useMemo(
@@ -209,9 +225,15 @@ export function PurchasePage() {
 				</section>
 
 				<section className="data-panel">
-					<div className="panel-heading"><div><h2>Add items</h2><p>Search by product name or item code</p></div><span className="count-pill">{products.data?.total ?? 0} matches</span></div>
-					<label className="sr-only" htmlFor="purchase-product-search">Search products</label>
-					<input id="purchase-product-search" className="input" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Find a product" />
+					<div className="panel-heading">
+						<div><h2>Add items</h2><p>Search the catalog or create a product for this purchase</p></div>
+						<div className="heading-actions">
+							<span className="count-pill">{products.data?.total ?? 0} matches</span>
+							<button type="button" className="btn-secondary" onClick={() => setProductFormOpen(true)}>Add new product</button>
+						</div>
+					</div>
+					<div className="px-4"><label className="sr-only" htmlFor="purchase-product-search">Search products</label>
+					<input id="purchase-product-search" className="input" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Find a product" /></div>
 					<div className="product-pick-list purchase-product-list">
 						{products.isPending && <p className="empty-state">Loading products...</p>}
 						{products.isError && <p className="empty-state text-red-700">Products could not be loaded.</p>}
@@ -271,6 +293,11 @@ export function PurchasePage() {
 			</section>
 
 			<ConfirmDialog open={!!deleteTarget} title="Delete purchase?" message={`Delete ${deleteTarget?.invoiceNumber ?? 'this purchase'}? If it was completed, its stock movement will be reversed.`} danger confirmLabel={deletePurchase.isPending ? 'Deleting...' : 'Delete purchase'} onCancel={() => setDeleteTarget(null)} onConfirm={() => deleteTarget && deletePurchase.mutate(deleteTarget._id)} />
+			<ProductFormModal
+				open={productFormOpen}
+				onClose={() => setProductFormOpen(false)}
+				onSubmit={async (values) => { await createCatalogProduct.mutateAsync(values); }}
+			/>
 			{lastInvoice && <InvoicePrint type="PURCHASE" invoiceNumber={lastInvoice.invoiceNumber} partyName={lastInvoice.supplierName} date={lastInvoice.invoiceDate} items={lastInvoice.items} subtotal={lastInvoice.productsValue} discount={lastInvoice.lessAmount} roundOff={lastInvoice.roundOff} grandTotal={lastInvoice.totalAmount} />}
 		</div>
 	);
