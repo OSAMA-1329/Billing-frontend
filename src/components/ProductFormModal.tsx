@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -24,7 +25,8 @@ const schema = z.object({
   godownLocation: z.string().optional(),
 });
 
-export type ProductFormValues = z.infer<typeof schema>;
+type ProductFormInput = z.input<typeof schema>;
+export type ProductFormValues = z.output<typeof schema>;
 
 interface ProductFormModalProps {
   open: boolean;
@@ -39,35 +41,48 @@ export function ProductFormModal({ open, onClose, onSubmit, initial }: ProductFo
     handleSubmit,
     reset,
     formState: { isSubmitting },
-  } = useForm<ProductFormValues>({
+  } = useForm<ProductFormInput, unknown, ProductFormValues>({
     resolver: zodResolver(schema),
-    values: initial
-      ? {
-          itemCode: initial.itemCode,
-          barcode: initial.barcode || '',
-          productName: initial.productName,
-          tamilProductName: initial.tamilProductName || '',
-          unit: initial.unit,
-          hsnCode: initial.hsnCode || '',
-          manufacturer: initial.manufacturer || '',
-          mrp: initial.mrp,
-          purchaseCost: initial.purchaseCost,
-          marginPercent: initial.marginPercent,
-          gstPercent: initial.gstPercent,
-          retailPrice: initial.retailPrice,
-          wholesalePrice: initial.wholesalePrice,
-          pointPercent: initial.pointPercent,
-          availableStock: initial.availableStock,
-          godownLocation: initial.godownLocation || '',
-        }
-      : {
-          unit: 'Pcs',
-          marginPercent: 0,
-          gstPercent: 0,
-          pointPercent: 0,
-          openingStock: 0,
-        },
+    defaultValues: {
+      unit: 'Pcs',
+      marginPercent: 0,
+      gstPercent: 0,
+      pointPercent: 0,
+      openingStock: 0,
+    },
   });
+
+  useEffect(() => {
+    if (!open) return;
+    if (initial) {
+      reset({
+        itemCode: initial.itemCode,
+        barcode: initial.barcode || '',
+        productName: initial.productName,
+        tamilProductName: initial.tamilProductName || '',
+        unit: initial.unit,
+        hsnCode: initial.hsnCode || '',
+        manufacturer: initial.manufacturer || '',
+        mrp: initial.mrp,
+        purchaseCost: initial.purchaseCost,
+        marginPercent: initial.marginPercent,
+        gstPercent: initial.gstPercent,
+        retailPrice: initial.retailPrice,
+        wholesalePrice: initial.wholesalePrice,
+        pointPercent: initial.pointPercent,
+        availableStock: initial.availableStock,
+        godownLocation: initial.godownLocation || '',
+      });
+      return;
+    }
+    reset({
+      unit: 'Pcs',
+      marginPercent: 0,
+      gstPercent: 0,
+      pointPercent: 0,
+      openingStock: 0,
+    });
+  }, [initial, open, reset]);
 
   return (
     <Modal open={open} title={initial ? 'Edit Product' : 'Add Product'} onClose={onClose} wide>
