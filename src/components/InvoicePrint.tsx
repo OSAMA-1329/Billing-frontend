@@ -43,7 +43,7 @@ export function InvoicePrint({
   return (
     <div className={`print-only bg-white p-4 text-black ${thermal ? 'w-[80mm] text-xs' : 'w-full max-w-3xl'}`}>
       <h1 className="text-center text-lg font-bold">{type === 'SALE' ? 'Tax Invoice' : 'Purchase Invoice'}</h1>
-      <p className="text-center text-sm">Demo Shop</p>
+      <p className="text-center text-sm">AR Traders Shop</p>
       <div className="mt-2 grid grid-cols-2 gap-1 text-sm">
         <span>Invoice: {invoiceNumber}</span>
         <span>Date: {formatDate(date)}</span>
