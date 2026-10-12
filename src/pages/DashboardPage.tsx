@@ -13,6 +13,8 @@ import { formatCurrency } from '../utils/format';
 
 interface DashboardData {
   todaySales: number;
+  todayCashSales: number;
+  todayUpiSales: number;
   todayPurchases: number;
   todayBills: number;
   totalProducts: number;
@@ -36,6 +38,8 @@ export function DashboardPage() {
 
   const cards = [
     { label: "Today's Sales", value: formatCurrency(data.todaySales) },
+    { label: "Today's Cash", value: formatCurrency(data.todayCashSales) },
+    { label: "Today's UPI", value: formatCurrency(data.todayUpiSales) },
     { label: "Today's Purchases", value: formatCurrency(data.todayPurchases) },
     { label: "Today's Bills", value: String(data.todayBills) },
     { label: 'Total Products', value: String(data.totalProducts) },
