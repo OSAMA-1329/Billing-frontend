@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { apiDelete, apiGet, apiPost, apiPut } from '../api/client';
+import { apiDelete, apiErrorMessage, apiGet, apiPost, apiPut } from '../api/client';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { InvoicePrint } from '../components/InvoicePrint';
 import { ProductFormModal, type ProductFormValues } from '../components/ProductFormModal';
@@ -233,7 +233,42 @@ export function PurchasePage() {
 						</div>
 					</div>
 					<div className="px-4"><label className="sr-only" htmlFor="purchase-product-search">Search products</label>
-					<input id="purchase-product-search" className="input" value={productSearch} onChange={(event) => setProductSearch(event.target.value)} placeholder="Find a product" /></div>
+					<input
+						id="purchase-product-search"
+						className="input"
+						value={productSearch}
+						onChange={(event) => setProductSearch(event.target.value)}
+						onKeyDown={async (event) => {
+							if (event.key !== 'Enter') return;
+
+							const barcode = productSearch.trim();
+							if (!barcode) return;
+
+							event.preventDefault();
+
+							try {
+								const result = await apiGet<Paginated<Product>>(
+									'/products',
+									{ barcode, page: 1, limit: 1 },
+								);
+
+								const product = result.items[0];
+								if (!product) {
+									toast.error(`No product found for barcode ${barcode}.`);
+									return;
+								}
+
+								addProduct(product);
+								setProductSearch('');
+							} catch (error) {
+								toast.error(
+									apiErrorMessage(error, 'Barcode lookup failed.'),
+								);
+							}
+						}}
+						placeholder="Scan barcode or find a product"
+					/>
+					</div>
 					<div className="product-pick-list purchase-product-list">
 						{products.isPending && <p className="empty-state">Loading products...</p>}
 						{products.isError && <p className="empty-state text-red-700">Products could not be loaded.</p>}

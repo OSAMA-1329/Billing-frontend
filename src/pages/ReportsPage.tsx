@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api/client';
+import { SaleDetailsModal } from '../components/SaleDetailsModal';
 import { downloadExport } from '../utils/download';
 import { formatCurrency, formatDate } from '../utils/format';
 
@@ -89,7 +91,9 @@ function displayValue(value: CellValue, format?: 'currency' | 'date' | 'number')
 }
 
 export function ReportsPage() {
+ const navigate = useNavigate();
 	const [report, setReport] = useState<ReportKey>('sales');
+	const [selectedSaleId, setSelectedSaleId] = useState('');
 	const [fromInput, setFromInput] = useState('');
 	const [toInput, setToInput] = useState('');
 	const [searchInput, setSearchInput] = useState('');
@@ -151,13 +155,21 @@ export function ReportsPage() {
 				{reportQuery.isPending ? <p className="empty-state">Loading report...</p> : reportQuery.isError ? <div className="empty-state"><p>Report could not be loaded.</p><button type="button" className="btn-secondary mt-3" onClick={() => reportQuery.refetch()}>Retry</button></div> : reportQuery.data.items.length ? (
 					<div className="table-scroll"><table className="table-dense w-full min-w-[680px]">
 						<thead><tr>{config.columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
-						<tbody>{reportQuery.data.items.map((row, rowIndex) => <tr key={String(row._id ?? row.invoiceNumber ?? row.name ?? row.productName ?? rowIndex)}>{config.columns.map((column) => <td key={column.key} className={column.format === 'currency' || column.format === 'number' ? 'text-right tabular-nums' : ''}>{displayValue(row[column.key], column.format)}</td>)}</tr>)}</tbody>
+						<tbody>{reportQuery.data.items.map((row, rowIndex) => <tr key={String(row._id ?? row.invoiceNumber ?? row.name ?? row.productName ?? rowIndex)}>{config.columns.map((column) => <td key={column.key} className={column.format === 'currency' || column.format === 'number' ? 'text-right tabular-nums' : ''}>{report === 'sales' && column.key === 'invoiceNumber' ? <button type="button" className="table-action" onClick={() => setSelectedSaleId(String(row._id))}>{displayValue(row[column.key], column.format)}</button> : displayValue(row[column.key], column.format)}</td>)}{report === 'sales' && <td className="text-right"><button type="button" className="table-action" onClick={() => setSelectedSaleId(String(row._id))}>View details</button></td>}</tr>)}</tbody>
 					</table></div>
 				) : <div className="empty-state"><strong>No {config.title.toLowerCase()} found</strong><p>Try a wider date range or different search.</p></div>}
 				{report !== 'profit' && reportQuery.data && (
 					<div className="table-footer"><span>Page {page} of {totalPages}</span><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button><button type="button" className="btn-secondary" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>Next</button></div></div>
 				)}
 			</section>
+			<SaleDetailsModal
+				invoiceId={selectedSaleId}
+				onClose={() => setSelectedSaleId('')}
+				onRebill={(invoice) => {
+					setSelectedSaleId('');
+					navigate('/sales', { state: { rebill: invoice } });
+				}}
+			/>
 		</div>
 	);
 }
