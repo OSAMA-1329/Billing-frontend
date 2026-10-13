@@ -40,6 +40,7 @@ export function ProductFormModal({ open, onClose, onSubmit, initial }: ProductFo
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { isSubmitting },
   } = useForm<ProductFormInput, unknown, ProductFormValues>({
     resolver: zodResolver(schema),
@@ -51,6 +52,7 @@ export function ProductFormModal({ open, onClose, onSubmit, initial }: ProductFo
       openingStock: 0,
     },
   });
+  const selectedUnit = watch('unit');
 
   useEffect(() => {
     if (!open) return;
@@ -110,7 +112,7 @@ export function ProductFormModal({ open, onClose, onSubmit, initial }: ProductFo
             ['retailPrice', 'Retail Price'],
             ['wholesalePrice', 'Wholesale Price'],
             ['pointPercent', 'Point %'],
-            ...(initial ? [['availableStock', `Stock on hand (${initial.unit})`] as const] : []),
+            ...(initial ? [['availableStock', `Stock on hand (${selectedUnit})`] as const] : []),
             ...(!initial ? [['openingStock', 'Opening Stock'] as const] : []),
             ['godownLocation', 'Godown Location'],
           ] as const
@@ -118,9 +120,7 @@ export function ProductFormModal({ open, onClose, onSubmit, initial }: ProductFo
           <div key={name}>
             <label className="label">{label}</label>
             {name === 'unit' ? (
-              initial ? (
-                <div className="input flex items-center bg-slate-50 text-slate-600">{initial.unit}</div>
-              ) : <select className="input" {...register('unit')}>
+              <select className="input" {...register('unit')}>
                 <option value="Kg">Kg</option>
                 <option value="g">g</option>
                 <option value="L">L</option>
@@ -131,7 +131,7 @@ export function ProductFormModal({ open, onClose, onSubmit, initial }: ProductFo
             ) : (
               <input
                 className="input"
-                step={name === 'availableStock' ? initial?.unit === 'Pcs' || initial?.unit === 'Pkt' ? '1' : '0.001' : ['mrp', 'purchaseCost', 'retailPrice', 'wholesalePrice'].includes(name) ? '0.01' : name.includes('Percent') || name === 'openingStock' ? '0.001' : undefined}
+                step={name === 'availableStock' ? selectedUnit === 'Pcs' || selectedUnit === 'Pkt' ? '1' : '0.001' : ['mrp', 'purchaseCost', 'retailPrice', 'wholesalePrice'].includes(name) ? '0.01' : name.includes('Percent') || name === 'openingStock' ? '0.001' : undefined}
                 min={['openingStock', 'availableStock'].includes(name) ? '0' : undefined}
                 type={['mrp', 'purchaseCost', 'marginPercent', 'gstPercent', 'retailPrice', 'wholesalePrice', 'pointPercent', 'openingStock', 'availableStock'].includes(name) ? 'number' : 'text'}
                 {...register(name)}
