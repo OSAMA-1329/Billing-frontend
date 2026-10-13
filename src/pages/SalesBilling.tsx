@@ -1759,6 +1759,7 @@ import {
 	formatDate,
 	round2,
 } from '../utils/format';
+import { useDebouncedValue } from '../utils/useDebouncedValue';
 
 import {
 	calculateUnitPriceAmount,
@@ -1799,6 +1800,7 @@ interface SaleInvoice {
 	_id: string;
 	invoiceNumber: string;
 	customerName: string;
+	customerPhone?: string;
 	customerId?: string;
 	createdAt: string;
 	items: SaleLinePayload[];
@@ -1851,12 +1853,15 @@ export function SalesBillingPage() {
 	const processedRebillId = useRef<string | null>(null);
 
 	const [productSearch, setProductSearch] = useState('');
+	const debouncedProductSearch = useDebouncedValue(productSearch);
 	const [cart, setCart] = useState<CartLine[]>([]);
 
 	const [quantityInputs, setQuantityInputs] =
 		useState<Record<string, string>>({});
 
 	const [customerId, setCustomerId] = useState('');
+	const [customerNameInput, setCustomerNameInput] = useState('');
+	const [customerPhoneInput, setCustomerPhoneInput] = useState('');
 	const [paymentMethod, setPaymentMethod] =
 		useState<PaymentMethod>('Cash');
 
@@ -1888,12 +1893,12 @@ export function SalesBillingPage() {
 	}, [lastInvoice]);
 
 	const products = useQuery({
-		queryKey: ['billing-products', productSearch],
+		queryKey: ['billing-products', debouncedProductSearch],
 		queryFn: () =>
 			apiGet<Paginated<Product>>('/products', {
 				page: 1,
 				limit: 12,
-				search: productSearch.trim(),
+				search: debouncedProductSearch.trim(),
 			}),
 	});
 
@@ -1904,6 +1909,23 @@ export function SalesBillingPage() {
 				page: 1,
 				limit: 250,
 			}),
+	});
+
+	const addBillingCustomer = useMutation({
+		mutationFn: () => apiPost<Customer>('/customers', {
+			name: customerNameInput.trim(),
+			phone: customerPhoneInput.trim(),
+		}),
+		onSuccess: async (customer) => {
+			setCustomerId(customer._id);
+			setCustomerNameInput(customer.name);
+			setCustomerPhoneInput(customer.phone || '');
+			await queryClient.invalidateQueries({ queryKey: ['customers'] });
+			toast.success(`${customer.name} added to customers.`);
+		},
+		onError: (error) => {
+			toast.error(apiErrorMessage(error, 'Customer could not be added.'));
+		},
 	});
 
 	const recentSales = useQuery({
@@ -2007,6 +2029,8 @@ export function SalesBillingPage() {
 						? rebillInvoice.customerId
 						: '',
 				);
+				setCustomerNameInput(rebillInvoice.customerName === 'Walk-in Customer' ? '' : rebillInvoice.customerName);
+				setCustomerPhoneInput(rebillInvoice.customerPhone || '');
 
 				setLastInvoice(null);
 				setRebillingInvoiceNumber(
@@ -2136,6 +2160,8 @@ export function SalesBillingPage() {
 			setCart([]);
 			setQuantityInputs({});
 			setCustomerId('');
+			setCustomerNameInput('');
+			setCustomerPhoneInput('');
 			setDiscountInput('0');
 			setCreditPaid('0');
 			setPaymentMethod('Cash');
@@ -2158,6 +2184,9 @@ export function SalesBillingPage() {
 				}),
 				queryClient.invalidateQueries({
 					queryKey: ['report'],
+				}),
+				queryClient.invalidateQueries({
+					queryKey: ['customers'],
 				}),
 			]);
 
@@ -2271,6 +2300,8 @@ export function SalesBillingPage() {
 				newCart.map((line) => [line.product._id, String(line.quantity)]),
 			));
 			setCustomerId(invoice.customerId ?? '');
+			setCustomerNameInput(invoice.customerName === 'Walk-in Customer' ? '' : invoice.customerName);
+			setCustomerPhoneInput(invoice.customerPhone || '');
 			setPaymentMethod(invoice.paymentMethod);
 			setCreditPaid(String(invoice.paidAmount ?? 0));
 			setDiscountInput(String(invoice.discount ?? 0));
@@ -2373,6 +2404,8 @@ export function SalesBillingPage() {
 		setDiscountInput('0');
 		setCreditPaid('0');
 		setCustomerId('');
+		setCustomerNameInput('');
+		setCustomerPhoneInput('');
 		setPaymentMethod('Cash');
 		setRebillingInvoiceNumber(null);
 		setEditingInvoiceId(null);
@@ -2385,9 +2418,9 @@ export function SalesBillingPage() {
 			return;
 		}
 
-		if (paymentMethod === 'Credit' && !customerId) {
+		if (paymentMethod === 'Credit' && !customerId && !customerNameInput.trim()) {
 			toast.error(
-				'Select a customer before recording a credit sale.',
+				'Enter a customer name or select a saved customer before recording a credit sale.',
 			);
 			return;
 		}
@@ -2429,6 +2462,8 @@ export function SalesBillingPage() {
 
 		const payload = {
 			customerId: customerId || undefined,
+			customerName: customerNameInput.trim() || undefined,
+			customerPhone: customerPhoneInput.trim() || undefined,
 			items,
 			discount,
 			paidAmount,
@@ -2864,7 +2899,7 @@ export function SalesBillingPage() {
 					)}
 
 					<div className="checkout-fields">
-						<div>
+						<div className="sm:col-span-2">
 							<label
 								className="label"
 								htmlFor="sale-customer"
@@ -2876,12 +2911,16 @@ export function SalesBillingPage() {
 								id="sale-customer"
 								className="input"
 								value={customerId}
-								onChange={(event) =>
-									setCustomerId(event.target.value)
-								}
+								onChange={(event) => {
+									const selectedId = event.target.value;
+									const selectedCustomer = customers.data?.items.find((customer) => customer._id === selectedId);
+									setCustomerId(selectedId);
+									setCustomerNameInput(selectedCustomer?.name || '');
+									setCustomerPhoneInput(selectedCustomer?.phone || '');
+								}}
 								disabled={customers.isError}
 							>
-								<option value="">Walk-in customer</option>
+								<option value="">{customerNameInput.trim() || 'Walk-in customer'}</option>
 
 								{customers.data?.items.map((customer) => (
 									<option
@@ -2895,6 +2934,22 @@ export function SalesBillingPage() {
 									</option>
 								))}
 							</select>
+
+							{!customerId && (
+								<div className="mt-2 grid gap-2 sm:grid-cols-2">
+									<div>
+										<label className="label" htmlFor="walk-in-name">Customer name</label>
+										<input id="walk-in-name" className="input" value={customerNameInput} onChange={(event) => setCustomerNameInput(event.target.value)} placeholder="Walk-in customer" maxLength={120} />
+									</div>
+									<div>
+										<label className="label" htmlFor="walk-in-phone">Phone number</label>
+										<input id="walk-in-phone" className="input" type="tel" value={customerPhoneInput} onChange={(event) => setCustomerPhoneInput(event.target.value)} placeholder="Optional" maxLength={40} />
+									</div>
+									<button type="button" className="btn-secondary justify-self-start" disabled={!customerNameInput.trim() || addBillingCustomer.isPending} onClick={() => addBillingCustomer.mutate()}>
+										{addBillingCustomer.isPending ? 'Adding customer...' : 'Add to customers'}
+									</button>
+								</div>
+							)}
 
 							{customers.isError && (
 								<p className="field-error">

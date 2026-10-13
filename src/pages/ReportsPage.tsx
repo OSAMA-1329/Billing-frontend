@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '../api/client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { apiDelete, apiGet, apiErrorMessage } from '../api/client';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { SaleDetailsModal } from '../components/SaleDetailsModal';
 import { downloadExport } from '../utils/download';
 import { formatCurrency, formatDate } from '../utils/format';
@@ -92,8 +93,10 @@ function displayValue(value: CellValue, format?: 'currency' | 'date' | 'number')
 
 export function ReportsPage() {
  const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const [report, setReport] = useState<ReportKey>('sales');
 	const [selectedSaleId, setSelectedSaleId] = useState('');
+	const [deleteTarget, setDeleteTarget] = useState<{ id: string; invoiceNumber: string } | null>(null);
 	const [fromInput, setFromInput] = useState('');
 	const [toInput, setToInput] = useState('');
 	const [searchInput, setSearchInput] = useState('');
@@ -113,6 +116,13 @@ export function ReportsPage() {
 	const totalPages = reportQuery.data?.limit && reportQuery.data.total
 		? Math.max(1, Math.ceil(reportQuery.data.total / reportQuery.data.limit))
 		: 1;
+	const deleteSale = useMutation({
+		mutationFn: (id: string) => apiDelete<{ deleted: boolean }>(`/sales/${id}?restock=false`),
+		onSuccess: async () => {
+			setDeleteTarget(null);
+			await queryClient.invalidateQueries({ queryKey: ['report'] });
+		},
+	});
 
 	function applyFilters(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -154,8 +164,8 @@ export function ReportsPage() {
 				<div className="panel-heading"><div><h2>{config.title}</h2><p>{reportQuery.data?.total ?? reportQuery.data?.items.length ?? 0} records</p></div><span className="count-pill">{filters.from || filters.to ? `${filters.from || 'Start'} — ${filters.to || 'Today'}` : 'All dates'}</span></div>
 				{reportQuery.isPending ? <p className="empty-state">Loading report...</p> : reportQuery.isError ? <div className="empty-state"><p>Report could not be loaded.</p><button type="button" className="btn-secondary mt-3" onClick={() => reportQuery.refetch()}>Retry</button></div> : reportQuery.data.items.length ? (
 					<div className="table-scroll"><table className="table-dense w-full min-w-[680px]">
-						<thead><tr>{config.columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
-						<tbody>{reportQuery.data.items.map((row, rowIndex) => <tr key={String(row._id ?? row.invoiceNumber ?? row.name ?? row.productName ?? rowIndex)}>{config.columns.map((column) => <td key={column.key} className={column.format === 'currency' || column.format === 'number' ? 'text-right tabular-nums' : ''}>{report === 'sales' && column.key === 'invoiceNumber' ? <button type="button" className="table-action" onClick={() => setSelectedSaleId(String(row._id))}>{displayValue(row[column.key], column.format)}</button> : displayValue(row[column.key], column.format)}</td>)}{report === 'sales' && <td className="text-right"><button type="button" className="table-action" onClick={() => setSelectedSaleId(String(row._id))}>View details</button></td>}</tr>)}</tbody>
+						<thead><tr>{config.columns.map((column) => <th key={column.key}>{column.label}</th>)}{report === 'sales' && <th>Actions</th>}</tr></thead>
+						<tbody>{reportQuery.data.items.map((row, rowIndex) => <tr key={String(row._id ?? row.invoiceNumber ?? row.name ?? row.productName ?? rowIndex)}>{config.columns.map((column) => <td key={column.key} className={column.format === 'currency' || column.format === 'number' ? 'text-right tabular-nums' : ''}>{report === 'sales' && column.key === 'invoiceNumber' ? <button type="button" className="table-action" onClick={() => setSelectedSaleId(String(row._id))}>{displayValue(row[column.key], column.format)}</button> : displayValue(row[column.key], column.format)}</td>)}{report === 'sales' && <td><div className="flex gap-2"><button type="button" className="table-action" onClick={() => setSelectedSaleId(String(row._id))}>View details</button><button type="button" className="table-action table-action-danger" onClick={() => setDeleteTarget({ id: String(row._id), invoiceNumber: String(row.invoiceNumber) })}>Delete</button></div></td>}</tr>)}</tbody>
 					</table></div>
 				) : <div className="empty-state"><strong>No {config.title.toLowerCase()} found</strong><p>Try a wider date range or different search.</p></div>}
 				{report !== 'profit' && reportQuery.data && (
@@ -168,6 +178,19 @@ export function ReportsPage() {
 				onRebill={(invoice) => {
 					setSelectedSaleId('');
 					navigate('/sales', { state: { rebill: invoice } });
+				}}
+			/>
+			<ConfirmDialog
+				open={!!deleteTarget}
+				title="Delete invoice without restocking?"
+				message={deleteSale.isError
+					? apiErrorMessage(deleteSale.error, 'Invoice could not be deleted.')
+					: `Delete ${deleteTarget?.invoiceNumber ?? 'this invoice'}? Product stock will not be changed.`}
+				danger
+				confirmLabel={deleteSale.isPending ? 'Deleting...' : 'Delete invoice'}
+				onCancel={() => setDeleteTarget(null)}
+				onConfirm={() => {
+					if (deleteTarget && !deleteSale.isPending) deleteSale.mutate(deleteTarget.id);
 				}}
 			/>
 		</div>

@@ -15,12 +15,15 @@ interface DashboardData {
   todaySales: number;
   todayCashSales: number;
   todayUpiSales: number;
+  todayCredit: number;
   todayPurchases: number;
   todayBills: number;
   totalProducts: number;
   lowStockProducts: number;
   customerOutstanding: number;
   supplierOutstanding: number;
+  monthRetailProfit: number;
+  monthWholesaleProfit: number;
   salesTrend: { _id: string; total: number }[];
   purchaseTrend: { _id: string; total: number }[];
   topProducts: { name: string; qty: number; revenue: number }[];
@@ -40,7 +43,10 @@ export function DashboardPage() {
     { label: "Today's Sales", value: formatCurrency(data.todaySales) },
     { label: "Today's Cash", value: formatCurrency(data.todayCashSales) },
     { label: "Today's UPI", value: formatCurrency(data.todayUpiSales) },
+    { label: "Today's Credit Due", value: formatCurrency(data.todayCredit) },
     { label: "Today's Purchases", value: formatCurrency(data.todayPurchases) },
+    { label: "This Month's Retail Profit", value: formatCurrency(data.monthRetailProfit) },
+    { label: "This Month's Wholesale Profit", value: formatCurrency(data.monthWholesaleProfit) },
     { label: "Today's Bills", value: String(data.todayBills) },
     { label: 'Total Products', value: String(data.totalProducts) },
     { label: 'Low Stock', value: String(data.lowStockProducts), alert: data.lowStockProducts > 0 },

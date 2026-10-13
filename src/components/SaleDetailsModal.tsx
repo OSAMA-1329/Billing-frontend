@@ -23,6 +23,7 @@ export interface SaleDetails {
   invoiceNumber: string;
   createdAt: string;
   customerName: string;
+  customerPhone?: string;
   customerId?: string | { _id: string; name: string; phone?: string; address?: string; gstNumber?: string } | null;
   items: SaleItem[];
   subtotal: number;
@@ -71,7 +72,7 @@ export function SaleDetailsModal({ invoiceId, onClose, onRebill }: SaleDetailsMo
             <div><span className="label">Bill ID</span><p className="break-all font-mono text-sm">{invoice._id}</p></div>
             <div><span className="label">Date and time</span><p className="text-sm">{displayDateTime(invoice.createdAt)}</p></div>
             <div><span className="label">Customer</span><p className="text-sm">{invoice.customerName || customer?.name || 'Walk-in Customer'}</p></div>
-            <div><span className="label">Phone</span><p className="text-sm">{customer?.phone || '—'}</p></div>
+            <div><span className="label">Phone</span><p className="text-sm">{customer?.phone || invoice.customerPhone || '—'}</p></div>
             <div><span className="label">Address / GST</span><p className="text-sm">{[customer?.address, customer?.gstNumber].filter(Boolean).join(' · ') || '—'}</p></div>
             <div><span className="label">Cashier</span><p className="text-sm">{invoice.createdBy?.name || invoice.createdBy?.email || '—'}</p></div>
           </div>

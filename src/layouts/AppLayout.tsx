@@ -11,7 +11,7 @@ const navGroups: { label: string; items: { to: string; label: string; roles: Rol
   { label: 'Inventory', items: [
     { to: '/products', label: 'Products', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
     { to: '/suppliers', label: 'Suppliers', roles: ['ADMIN', 'MANAGER'] },
-    // { to: '/customers', label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
+    { to: '/customers', label: 'Customers', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
     { to: '/stock', label: 'Stock', roles: ['ADMIN', 'MANAGER', 'STAFF'] },
   ] },
   { label: 'Manage', items: [

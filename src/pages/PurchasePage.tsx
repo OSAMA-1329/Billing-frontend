@@ -8,6 +8,7 @@ import { InvoicePrint } from '../components/InvoicePrint';
 import { ProductFormModal, type ProductFormValues } from '../components/ProductFormModal';
 import type { Paginated, Product, Supplier } from '../types';
 import { computeRoundOff, formatCurrency, formatDate, round2 } from '../utils/format';
+import { useDebouncedValue } from '../utils/useDebouncedValue';
 
 type PurchaseStatus = 'PENDING' | 'COMPLETED' | 'CANCELLED';
 
@@ -53,6 +54,7 @@ function localDateValue() {
 export function PurchasePage() {
 	const queryClient = useQueryClient();
 	const [productSearch, setProductSearch] = useState('');
+	const debouncedProductSearch = useDebouncedValue(productSearch);
 	const [cart, setCart] = useState<PurchaseLine[]>([]);
 	const [supplierId, setSupplierId] = useState('');
 	const [externalInvoiceNumber, setExternalInvoiceNumber] = useState('');
@@ -66,8 +68,8 @@ export function PurchasePage() {
 	const [productFormOpen, setProductFormOpen] = useState(false);
 
 	const products = useQuery({
-		queryKey: ['purchase-products', productSearch],
-		queryFn: () => apiGet<Paginated<Product>>('/products', { page: 1, limit: 12, search: productSearch.trim() }),
+		queryKey: ['purchase-products', debouncedProductSearch],
+		queryFn: () => apiGet<Paginated<Product>>('/products', { page: 1, limit: 12, search: debouncedProductSearch.trim() }),
 	});
 	const suppliers = useQuery({
 		queryKey: ['suppliers', 'purchase'],
