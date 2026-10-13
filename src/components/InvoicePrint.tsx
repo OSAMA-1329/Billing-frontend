@@ -198,6 +198,7 @@ export function InvoicePrint({
           color: #000;
           font-family: Arial, "Noto Sans Tamil", sans-serif;
           text-transform: uppercase;
+          font-weight: 700;
         }
 
         .thermal-invoice *,
@@ -331,11 +332,11 @@ export function InvoicePrint({
         }
 
         .thermal-items .price-column {
-          width: 18%;
+          width: 22%;
         }
 
         .thermal-items .product-column {
-          width: 35%;
+          width: 31%;
         }
 
         .thermal-items .quantity-column {
@@ -378,9 +379,11 @@ export function InvoicePrint({
         }
 
         .price-cell {
-          text-align: left;
-          white-space: nowrap;
-          font-weight: 500;
+          text-align: center;
+          white-space: normal;
+          overflow-wrap: anywhere;
+          font-size: 10px;
+          font-weight: 700;
         }
 
         .product-cell {
@@ -389,7 +392,7 @@ export function InvoicePrint({
 
         .product-name {
           text-align: center;
-          font-weight: 600;
+          font-weight: 700;
           text-transform: uppercase;
           overflow-wrap: anywhere;
           word-break: normal;
@@ -403,7 +406,7 @@ export function InvoicePrint({
         .amount-cell {
           text-align: right;
           white-space: nowrap;
-          font-weight: 500;
+          font-weight: 700;
         }
 
         /* SUMMARY */
