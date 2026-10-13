@@ -1739,10 +1739,14 @@ import toast from 'react-hot-toast';
 import {
 	apiErrorMessage,
 	apiGet,
+	apiPut,
 	apiPost,
+	apiDelete,
 } from '../api/client';
 
 import { InvoicePrint } from '../components/InvoicePrint';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useAuth } from '../contexts/AuthContext';
 
 import type {
 	Customer,
@@ -1805,6 +1809,7 @@ interface SaleInvoice {
 	grandTotal: number;
 	paidAmount: number;
 	paymentMethod: PaymentMethod;
+	stockApplied?: boolean;
 }
 
 interface RebillLocationState {
@@ -1834,6 +1839,7 @@ function getProductBaseStock(product: Product) {
 
 export function SalesBillingPage() {
 	const queryClient = useQueryClient();
+	const { hasRole } = useAuth();
 	const location = useLocation();
 	const navigate = useNavigate();
 
@@ -1859,11 +1865,17 @@ export function SalesBillingPage() {
 
 	const [lastInvoice, setLastInvoice] =
 		useState<SaleInvoice | null>(null);
+	const [editingInvoiceId, setEditingInvoiceId] =
+		useState<string | null>(null);
+	const [editLoading, setEditLoading] = useState(false);
+	const [deleteTarget, setDeleteTarget] =
+		useState<SaleInvoice | null>(null);
 
 	const [rebillingInvoiceNumber, setRebillingInvoiceNumber] =
 		useState<string | null>(null);
 
 	const [rebillLoading, setRebillLoading] = useState(false);
+	const canManageSales = hasRole('ADMIN', 'MANAGER');
 
 	useEffect(() => {
 		if (!lastInvoice) return;
@@ -2164,6 +2176,117 @@ export function SalesBillingPage() {
 		},
 	});
 
+	const updateSale = useMutation({
+		mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
+			apiPut<SaleInvoice>(`/sales/${id}`, payload),
+
+		onSuccess: async (invoice) => {
+			clearBill();
+			setLastInvoice(null);
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ['sales'] }),
+				queryClient.invalidateQueries({ queryKey: ['products'] }),
+				queryClient.invalidateQueries({ queryKey: ['billing-products'] }),
+				queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+				queryClient.invalidateQueries({ queryKey: ['report'] }),
+			]);
+			toast.success(`Invoice ${invoice.invoiceNumber} updated.`);
+		},
+
+		onError: (error) => {
+			toast.error(apiErrorMessage(error, 'Invoice could not be updated. Check stock and try again.'));
+		},
+	});
+
+	const deleteSale = useMutation({
+		mutationFn: (id: string) => apiDelete<{ deleted: boolean }>(`/sales/${id}`),
+
+		onSuccess: async () => {
+			setDeleteTarget(null);
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ['sales'] }),
+				queryClient.invalidateQueries({ queryKey: ['products'] }),
+				queryClient.invalidateQueries({ queryKey: ['billing-products'] }),
+				queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+				queryClient.invalidateQueries({ queryKey: ['report'] }),
+			]);
+			toast.success('Invoice deleted. Its products were returned to stock.');
+		},
+
+		onError: (error) => {
+			toast.error(apiErrorMessage(error, 'Invoice could not be deleted.'));
+		},
+	});
+
+	async function editInvoice(invoice: SaleInvoice) {
+		if ((cart.length > 0 || editingInvoiceId) && !window.confirm('Discard the current bill and edit this invoice?')) {
+			return;
+		}
+
+		setEditLoading(true);
+		try {
+			const productIds = [...new Set(invoice.items.map((item) => String(item.productId)))];
+			const loadedProducts = await Promise.all(
+				productIds.map((id) => apiGet<Product>(`/products/${id}`)),
+			);
+			const productById = new Map(loadedProducts.map((product) => [product._id, product]));
+			const returnedBaseStock = new Map<string, number>();
+
+			if (invoice.stockApplied !== false) {
+				for (const item of invoice.items) {
+					const productId = String(item.productId);
+					const product = productById.get(productId);
+					if (!product) throw new Error(`Could not load product: ${item.productName}.`);
+					const baseQuantity = item.baseQuantity ?? convertToBaseQuantity(
+						item.quantity,
+						item.unit ?? product.unit,
+					);
+					returnedBaseStock.set(
+						productId,
+						(returnedBaseStock.get(productId) ?? 0) + baseQuantity,
+					);
+				}
+			}
+
+			const newCart = invoice.items.map((item) => {
+				const productId = String(item.productId);
+				const currentProduct = productById.get(productId);
+				if (!currentProduct) throw new Error(`Could not load product: ${item.productName}.`);
+				const baseStock = getProductBaseStock(currentProduct) + (returnedBaseStock.get(productId) ?? 0);
+				const product = {
+					...currentProduct,
+					stockBaseQuantity: baseStock,
+					availableStock: convertFromBaseQuantity(baseStock, currentProduct.unit),
+				};
+				return {
+					product,
+					quantity: Number(item.quantity),
+					unit: item.unit || product.unit,
+					price: Number(item.price ?? product.retailPrice),
+				};
+			});
+
+			setCart(newCart);
+			setQuantityInputs(Object.fromEntries(
+				newCart.map((line) => [line.product._id, String(line.quantity)]),
+			));
+			setCustomerId(invoice.customerId ?? '');
+			setPaymentMethod(invoice.paymentMethod);
+			setCreditPaid(String(invoice.paidAmount ?? 0));
+			setDiscountInput(String(invoice.discount ?? 0));
+			setLastInvoice(null);
+			setRebillingInvoiceNumber(null);
+			setEditingInvoiceId(invoice._id);
+			processedRebillId.current = null;
+			toast.success(`Invoice ${invoice.invoiceNumber} loaded for editing.`);
+			window.scrollTo({ top: 0, behavior: 'smooth' });
+		} catch (error) {
+			toast.error(apiErrorMessage(error, 'Could not load this invoice for editing.'));
+		} finally {
+			setEditLoading(false);
+		}
+	}
+
 	function addProduct(product: Product) {
 		if (getProductBaseStock(product) <= 0) {
 			toast.error('This product is out of stock.');
@@ -2252,6 +2375,7 @@ export function SalesBillingPage() {
 		setCustomerId('');
 		setPaymentMethod('Cash');
 		setRebillingInvoiceNumber(null);
+		setEditingInvoiceId(null);
 		processedRebillId.current = null;
 	}
 
@@ -2303,16 +2427,20 @@ export function SalesBillingPage() {
 			}),
 		);
 
-		// Always create a NEW sale.
-		// Never send the original invoice ID as an update target.
-		createSale.mutate({
+		const payload = {
 			customerId: customerId || undefined,
 			items,
 			discount,
 			paidAmount,
 			paymentMethod,
-			clientRequestId: crypto.randomUUID(),
-		});
+		};
+
+		if (editingInvoiceId) {
+			updateSale.mutate({ id: editingInvoiceId, payload });
+			return;
+		}
+
+		createSale.mutate({ ...payload, clientRequestId: crypto.randomUUID() });
 	}
 
 	return (
@@ -2330,6 +2458,11 @@ export function SalesBillingPage() {
 						<p className="mt-2 font-medium text-emerald-700">
 							Rebilling from invoice {rebillingInvoiceNumber}.
 							The original invoice will remain unchanged.
+						</p>
+					)}
+					{editingInvoiceId && (
+						<p className="mt-2 font-medium text-amber-700">
+							Editing an existing invoice. Its bill number will stay unchanged.
 						</p>
 					)}
 				</div>
@@ -2893,13 +3026,17 @@ export function SalesBillingPage() {
 						disabled={
 							!cart.length ||
 							createSale.isPending ||
+							updateSale.isPending ||
+							editLoading ||
 							rebillLoading
 						}
 						onClick={submitSale}
 					>
-						{createSale.isPending
-							? 'Completing sale...'
-							: rebillingInvoiceNumber
+						{createSale.isPending || updateSale.isPending
+							? editingInvoiceId ? 'Saving changes...' : 'Completing sale...'
+							: editingInvoiceId
+								? `Save changes · ${formatCurrency(totals.finalTotal)}`
+								: rebillingInvoiceNumber
 								? `Create new bill · ${formatCurrency(totals.finalTotal)}`
 								: `Complete sale · ${formatCurrency(totals.finalTotal)}`}
 					</button>
@@ -2931,6 +3068,7 @@ export function SalesBillingPage() {
 									<th>Date</th>
 									<th>Payment</th>
 									<th className="text-right">Total</th>
+									{canManageSales && <th>Actions</th>}
 								</tr>
 							</thead>
 
@@ -2954,6 +3092,28 @@ export function SalesBillingPage() {
 										<td className="text-right font-semibold">
 											{formatCurrency(invoice.grandTotal)}
 										</td>
+										{canManageSales && (
+											<td>
+												<div className="flex gap-2">
+													<button
+														type="button"
+														className="table-action"
+														disabled={editLoading || updateSale.isPending}
+														onClick={() => void editInvoice(invoice)}
+													>
+														Edit
+													</button>
+													<button
+														type="button"
+														className="table-action table-action-danger"
+														disabled={deleteSale.isPending}
+														onClick={() => setDeleteTarget(invoice)}
+													>
+														Delete
+													</button>
+												</div>
+										</td>
+										)}
 									</tr>
 								))}
 							</tbody>
@@ -2961,6 +3121,16 @@ export function SalesBillingPage() {
 					</div>
 				)}
 			</section>
+
+			<ConfirmDialog
+				open={!!deleteTarget}
+				title="Delete invoice?"
+				message={`Delete ${deleteTarget?.invoiceNumber ?? 'this invoice'}? Its products will be returned to stock, and the next bill number will remain in sequence.`}
+				danger
+				confirmLabel={deleteSale.isPending ? 'Deleting...' : 'Delete invoice'}
+				onCancel={() => setDeleteTarget(null)}
+				onConfirm={() => deleteTarget && deleteSale.mutate(deleteTarget._id)}
+			/>
 
 			{lastInvoice &&
 				createPortal(

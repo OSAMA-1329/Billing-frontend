@@ -15,12 +15,14 @@ import { StockPage } from './pages/StockPage';
 import { SupplierPage } from './pages/SupplierPage';
 import { UsersPage } from './pages/Users';
 import { ProtectedRoute } from './routes/ProtectedRoute';
+import ApiKeepAlive from './components/ApiKeepAlive';
 
 const queryClient = new QueryClient();
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ApiKeepAlive/>
       <AuthProvider>
         <BrowserRouter>
           <Toaster position="top-right" />
