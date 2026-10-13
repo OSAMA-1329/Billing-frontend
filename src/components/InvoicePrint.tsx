@@ -849,6 +849,8 @@ export function InvoicePrint({
   paymentMethod,
   thermal = true,
 }: InvoicePrintProps) {
+  if (items.length === 0) return null;
+
   return (
     <>
       <div
@@ -1278,12 +1280,8 @@ export function InvoicePrint({
       print-color-adjust: exact;
     }
 
-    /*
-      Hide the app visually without display:none on its ancestors.
-      This allows the invoice portal to remain printable.
-    */
-    body * {
-      visibility: hidden !important;
+    body > :not(#invoice-print) {
+      display: none !important;
     }
 
     #invoice-print,
@@ -1292,10 +1290,8 @@ export function InvoicePrint({
     }
 
     #invoice-print {
-      position: absolute !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: auto !important;
+      position: static !important;
+      display: block !important;
       margin: 0 !important;
       height: auto !important;
       min-height: 0 !important;

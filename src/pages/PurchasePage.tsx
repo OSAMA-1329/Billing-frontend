@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { apiDelete, apiErrorMessage, apiGet, apiPost, apiPut } from '../api/client';
@@ -333,7 +334,21 @@ export function PurchasePage() {
 				onClose={() => setProductFormOpen(false)}
 				onSubmit={async (values) => { await createCatalogProduct.mutateAsync(values); }}
 			/>
-			{lastInvoice && <InvoicePrint type="PURCHASE" invoiceNumber={lastInvoice.invoiceNumber} partyName={lastInvoice.supplierName} date={lastInvoice.invoiceDate} items={lastInvoice.items} subtotal={lastInvoice.productsValue} discount={lastInvoice.lessAmount} roundOff={lastInvoice.roundOff} grandTotal={lastInvoice.totalAmount} />}
+			{lastInvoice &&
+				createPortal(
+					<InvoicePrint
+						type="PURCHASE"
+						invoiceNumber={lastInvoice.invoiceNumber}
+						partyName={lastInvoice.supplierName}
+						date={lastInvoice.invoiceDate}
+						items={lastInvoice.items}
+						subtotal={lastInvoice.productsValue}
+						discount={lastInvoice.lessAmount}
+						roundOff={lastInvoice.roundOff}
+						grandTotal={lastInvoice.totalAmount}
+					/>,
+					document.body,
+				)}
 		</div>
 	);
 }
